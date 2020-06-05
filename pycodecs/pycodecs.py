@@ -13,40 +13,54 @@ class Codec(object):
         self.file_extension = None
 
     def encode(self, ifile: str, ofile: str, quality: int):
-        pass
+        raise NotImplementedError()
 
     def decode(self, ifile: str, ofile: str):
-        pass
+        raise NotImplementedError()
 
     def quality_steps(self):
-        pass
+        raise NotImplementedError()
 
     def available(self):
-        pass
+        raise NotImplementedError()
 
-    def apply(self, target: Union[np.ndarray, str], quality: int, folder: str = None) -> (np.ndarray, int):
-        if type(target) == np.ndarray:
-            target_file = NamedTemporaryFile(suffix=".png")
-            imageio.imsave(target_file.name, target)
+    def apply(self, original: Union[np.ndarray, str], quality: int, encoded: str = None, decoded: str = None) -> \
+            (int, np.ndarray):
+        if type(original) == np.ndarray:
+            original_file = NamedTemporaryFile(suffix=".png")
+            imageio.imsave(original_file.name, original)
+            original_file_name = original_file.name
         else:
-            target_file = target
+            original_file_name = original
 
+        if encoded is None:
+            encoded_file = NamedTemporaryFile(suffix=f".{self.file_extension}")
+            encoded_file_name = encoded_file.name
+        else:
+            encoded_file_name = encoded
 
+        if decoded is None:
+            decoded_file = NamedTemporaryFile(suffix=".png")
+            decoded_file_name = decoded_file.name
+        else:
+            decoded_file_name = decoded
 
-        if type(target) == np.ndarray:
-            target_file.close()
-        with NamedTemporaryFile(suffix=".png") as tmp:
-            imageio.imsave(tmp.name, target)
-            with NamedTemporaryFile(suffix=f".{self.file_extension}") as code_ntf:
-                with NamedTemporaryFile(suffix=".png") as recon_ntf:
-                    self.encode(tmp.name, code_ntf.name, quality)
-                    decoded_name = recon_ntf.name
-                    if folder is not None:
-                        decoded_name = os.path.join(folder, f"{quality:03d}.png")
-                    self.decode(code_ntf.name, decoded_name)
-                    restored = imageio.imread(decoded_name)
-                    bpp = os.stat(code_ntf.name).st_size * 8 / target.shape[0] / target.shape[1]
-                    return restored, bpp
+        self.encode(original_file_name, encoded_file_name, quality)
+        self.decode(encoded_file_name, decoded_file_name)
+
+        encoded_size_bytes = os.stat(encoded_file_name).st_size
+
+        restored = None
+        if decoded is None:
+            restored = imageio.imread(decoded_file_name)
+            decoded_file.close()
+
+        if encoded is None:
+            encoded_file.close()
+
+        if type(original) == np.ndarray:
+            original_file.close()
+        return encoded_size_bytes, restored
 
 
 class BPG(Codec):
