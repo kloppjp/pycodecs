@@ -34,7 +34,7 @@ class Codec(object):
             original_file_name = original
 
         if encoded is None:
-            encoded_file = NamedTemporaryFile(suffix=f".{self.file_extension}")
+            encoded_file = NamedTemporaryFile(suffix=self.file_extension)
             encoded_file_name = encoded_file.name
         else:
             encoded_file_name = encoded
@@ -72,7 +72,7 @@ class BPG(Codec):
         self.bitdepth = bitdepth
         self.colourspace = colourspace
         self.format = format
-        self.file_extension = 'bpg'
+        self.file_extension = '.bpg'
         self.encoder = encoder
 
     def available(self):
@@ -106,7 +106,7 @@ class WebP(Codec):
     def __init__(self, speed: int = 6):
         super().__init__()
         self.speed = speed
-        self.file_extension = 'webp'
+        self.file_extension = '.webp'
 
     def available(self):
         return not find_executable('cwebp') is None and not find_executable('dwebp') is None
@@ -125,7 +125,7 @@ class JPEGFI(Codec):
 
     def __init__(self):
         super(JPEGFI, self).__init__()
-        self.file_extension = 'jif'
+        self.file_extension = '.jif'
 
     def available(self):
         return True
@@ -144,7 +144,7 @@ class JPEG(Codec):
 
     def __init__(self):
         super(JPEG, self).__init__()
-        self.file_extension = 'jpg'
+        self.file_extension = '.jpg'
 
     def available(self):
         return True
@@ -163,7 +163,7 @@ class AV1(Codec):
 
     def __init__(self, pixel_format: str = 'yuv444p', ffmpeg_path: str = None):
         super(AV1, self).__init__()
-        self.file_extension = 'ivf'
+        self.file_extension = '.ivf'
         self.pixel_format = pixel_format
         if ffmpeg_path is None:
             self.ffmpeg_path = 'ffmpeg'
