@@ -23,6 +23,12 @@ Install PyCodecs for development:
 pip install -e .
 ```
 
+If you want to use AV1, you can get a current ffmpeg build with AV1 and x265 by running. 
+Note that you will be prompted for root access.
+```shell script
+bash util/install_ffmpeg_av1_x265.sh
+```
+
 ## Use
 
 ```python
