@@ -4,7 +4,7 @@ PyCodecs simple (image) codec interface.
 ## Install
 To install, first clone 
 ```shell script
-git clone https://github.com/kloppjp/pycodecs
+git clone https://github.com/kloppjp/pycodecs.git
 ```
 Install requirements:
 ```shell script
