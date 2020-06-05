@@ -1,1 +1,3 @@
 .idea
+pycodecs/__pycache__
+pycodecs.egg-info
