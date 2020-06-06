@@ -9,13 +9,13 @@ else
   echo "FFMPEG with AOM AV1 will be installed in $FFMPEG/bin"
 fi
 
-sudo apt update && sudo apt upgrade -y
-
 FFMPEG_SRC=$FFMPEG/src
 FFMPEG_BIN=$FFMPEG/bin
 FFMPEG_BLD=$FFMPEG/build
 
 mkdir -p $FFMPEG_SRC $FFMPEG_BIN $FFMPEG_BLD
+
+sudo apt update
 
 sudo apt -y install \
   autoconf \
