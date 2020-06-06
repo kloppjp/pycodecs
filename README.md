@@ -10,7 +10,7 @@ Install requirements:
 ```shell script
 pip install -r requirements.txt
 ```
-Or if you use conda:
+Or, if you use conda:
 ```shell script
 conda install --file requirements.txt
 ```
@@ -27,6 +27,10 @@ If you want to use AV1, you can get a current ffmpeg build with AV1 and x265 by 
 Note that you will be prompted for root access.
 ```shell script
 bash util/install_ffmpeg_av1_x265.sh
+```
+Same goes for BPG (providing x265 and h265/JCTVC image coding):
+```shell script
+bash util/install_bpg.sh
 ```
 
 ## Use
