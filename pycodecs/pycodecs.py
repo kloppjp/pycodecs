@@ -9,10 +9,14 @@ from distutils.spawn import find_executable
 
 class Codec(object):
 
-    def __init__(self):
+    def __init__(self, default_quality: int = None):
         self.file_extension = None
+        if default_quality is None:
+            self.default_quality = self.quality_steps()[len(self.quality_steps()) // 2]
+        else:
+            self.default_quality = default_quality
 
-    def encode(self, ifile: str, ofile: str, quality: int):
+    def encode(self, ifile: str, ofile: str, quality: int = None):
         raise NotImplementedError()
 
     def decode(self, ifile: str, ofile: str):
@@ -24,11 +28,17 @@ class Codec(object):
     def available(self):
         raise NotImplementedError()
 
-    def apply(self, original: Union[np.ndarray, str], quality: int, encoded: str = None, decoded: str = None) -> \
+    def apply(self, original: Union[np.ndarray, str], quality: int = None, encoded: str = None, decoded: str = None) -> \
             (int, np.ndarray):
+        channels_first = False
         if type(original) == np.ndarray:
             original_file = NamedTemporaryFile(suffix=".png")
-            imageio.imsave(original_file.name, original)
+            assert original.ndim in (2, 3)
+            if original.ndim == 3:
+                if original.shape[0] == 3 and not original.shape[2] == 3:
+                    original = np.transpose(original, (1, 2, 0))
+                    channels_first = True
+            imageio.imwrite(original_file.name, original)
             original_file_name = original_file.name
         else:
             original_file_name = original
@@ -45,6 +55,8 @@ class Codec(object):
         else:
             decoded_file_name = decoded
 
+        if quality is None:
+            quality = self.default_quality
         self.encode(original_file_name, encoded_file_name, quality)
         self.decode(encoded_file_name, decoded_file_name)
 
@@ -53,6 +65,8 @@ class Codec(object):
         restored = None
         if decoded is None:
             restored = imageio.imread(decoded_file_name)
+            if channels_first:
+                restored = np.transpose(restored, (2, 0, 1))
             decoded_file.close()
 
         if encoded is None:
@@ -66,8 +80,8 @@ class Codec(object):
 class BPG(Codec):
 
     def __init__(self, speed: int = 9, bitdepth: int = 12, colourspace: str = 'ycbcr', format: str = '444',
-                 encoder: str = 'jctvc'):
-        super(BPG, self).__init__()
+                 encoder: str = 'jctvc', **kwargs):
+        super(BPG, self).__init__(**kwargs)
         self.speed = speed
         self.bitdepth = bitdepth
         self.colourspace = colourspace
@@ -78,7 +92,9 @@ class BPG(Codec):
     def available(self):
         return not find_executable("bpgenc") is None and not find_executable("bpgdec") is None
 
-    def encode(self, ifile: str, ofile: str, quality: int):
+    def encode(self, ifile: str, ofile: str, quality: int = None):
+        if quality is None:
+            quality = self.default_quality
         subprocess.run(["bpgenc", "-m", str(self.speed), "-b", str(self.bitdepth), "-q", str(quality), "-c",
                         self.colourspace, "-f", self.format, "-e", self.encoder, ifile, "-o", ofile])
 
@@ -86,7 +102,7 @@ class BPG(Codec):
         subprocess.run(["bpgdec", ifile, "-o", ofile])
 
     def quality_steps(self):
-        return range(51, 0, -1)
+        return [q for q in range(51, 0, -1)]
 
 
 class X265(BPG):
@@ -103,66 +119,72 @@ class H265(BPG):
 
 class WebP(Codec):
 
-    def __init__(self, speed: int = 6):
-        super().__init__()
+    def __init__(self, speed: int = 6, **kwargs):
+        super(WebP, self).__init__(**kwargs)
         self.speed = speed
         self.file_extension = '.webp'
 
     def available(self):
         return not find_executable('cwebp') is None and not find_executable('dwebp') is None
 
-    def encode(self, ifile: str, ofile: str, quality: int):
+    def encode(self, ifile: str, ofile: str, quality: int = None):
+        if quality is None:
+            quality = self.default_quality
         subprocess.run(["cwebp", "-quiet", "-m", str(self.speed), "-q", str(quality), ifile, "-o", ofile])
 
     def decode(self, ifile: str, ofile: str):
         subprocess.run(["dwebp", "-quiet", ifile, "-o", ofile])
 
     def quality_steps(self):
-        return range(0, 101)
+        return [q for q in range(0, 101)]
 
 
 class JPEGFI(Codec):
 
-    def __init__(self):
-        super(JPEGFI, self).__init__()
+    def __init__(self, **kwargs):
+        super(JPEGFI, self).__init__(**kwargs)
         self.file_extension = '.jif'
 
     def available(self):
         return True
 
-    def encode(self, ifile: str, ofile: str, quality: int):
+    def encode(self, ifile: str, ofile: str, quality: int = None):
+        if quality is None:
+            quality = self.default_quality
         imageio.imwrite(ofile, imageio.imread(ifile), quality=quality, optimize=True, baseline=True)
 
     def decode(self, ifile: str, ofile: str):
         imageio.imwrite(ofile, imageio.imread(ifile))
 
     def quality_steps(self):
-        return range(1, 101)
+        return [q for q in range(1, 101)]
 
 
 class JPEG(Codec):
 
-    def __init__(self):
-        super(JPEG, self).__init__()
+    def __init__(self, **kwargs):
+        super(JPEG, self).__init__(**kwargs)
         self.file_extension = '.jpg'
 
     def available(self):
         return True
 
-    def encode(self, ifile: str, ofile: str, quality: int):
+    def encode(self, ifile: str, ofile: str, quality: int = None):
+        if quality is None:
+            quality = self.default_quality
         imageio.imwrite(ofile, imageio.imread(ifile), quality=quality, optimize=True)
 
     def decode(self, ifile: str, ofile: str):
         imageio.imwrite(ofile, imageio.imread(ifile))
 
     def quality_steps(self):
-        return range(1, 101)
+        return [q for q in range(1, 101)]
 
 
 class AV1(Codec):
 
-    def __init__(self, pixel_format: str = 'yuv444p', ffmpeg_path: str = None):
-        super(AV1, self).__init__()
+    def __init__(self, pixel_format: str = 'yuv444p', ffmpeg_path: str = None, **kwargs):
+        super(AV1, self).__init__(**kwargs)
         self.file_extension = '.ivf'
         self.pixel_format = pixel_format
         if ffmpeg_path is None:
@@ -180,7 +202,9 @@ class AV1(Codec):
                 return True
         return False
 
-    def encode(self, ifile: str, ofile: str, quality: int):
+    def encode(self, ifile: str, ofile: str, quality: int = None):
+        if quality is None:
+            quality = self.default_quality
         subprocess.run([self.ffmpeg_path, '-y', '-hide_banner', '-loglevel', 'panic',
                         "-i", ifile, "-c:v", "libaom-av1", "-pix_fmt", self.pixel_format, "-crf", f"{quality}",
                         "-b:v", "0", "-strict", "experimental", ofile])
@@ -190,7 +214,7 @@ class AV1(Codec):
                         '-i', ifile, ofile])
 
     def quality_steps(self):
-        return range(60, 0, -1)
+        return [q for q in range(60, 0, -1)]
 
 
 codecs = {'bpg': BPG, 'webp': WebP, 'jpegfi': JPEGFI, 'av1': AV1, 'jpeg': JPEG, 'x265': X265}
