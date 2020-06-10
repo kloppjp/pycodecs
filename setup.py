@@ -2,7 +2,7 @@ import setuptools
 
 setuptools.setup(
     name="pycodecs",
-    version="0.1",
+    version="0.1.1",
     author="Jan",
     description="A simple python library to interface codecs",
     url="https://github.com/kloppjp/pycodecs",

@@ -9,12 +9,12 @@ from distutils.spawn import find_executable
 
 class Codec(object):
 
-    def __init__(self, default_quality: int = None):
+    def __init__(self, quality: int = None):
         self.file_extension = None
-        if default_quality is None:
+        if quality is None:
             self.default_quality = self.quality_steps()[len(self.quality_steps()) // 2]
         else:
-            self.default_quality = default_quality
+            self.default_quality = quality
 
     def encode(self, ifile: str, ofile: str, quality: int = None):
         raise NotImplementedError()
