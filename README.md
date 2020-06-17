@@ -1,5 +1,25 @@
 # PyCodecs
-PyCodecs simple (image) codec interface.
+PyCodecs: A simple (image) codec interface. In early alpha stage.
+
+## Capabilities
+
+The (for now) supported codecs are listed below. 
+Only image coding is supported.
+Some codecs can be supplied with data via IPC (pipe), so you can encode and decode directly from and to memory,
+i.e. a `numpy.ndarray` doesn't have to be saved to disk first.
+
+Codec | Pipe | Info
+----- | ---- | ----
+WebP | No | https://developers.google.com/speed/webp
+BPG/H265 | No |  https://bellard.org/bpg/
+X265 | Yes | http://x265.org/
+AV1 | Yes | https://aomedia.org/av1-features/get-started/
+
+### Caveats
+
+While there are certainly some bugs hidden and the API design isn't final, the size 
+estimates for the AV1 code are too high, because the bitstream is wrapped in FFMPEG's _NUT_ format.
+This is to be fixed soon. X265 writes raw _hevc_ format on the contrary (you can enforce _NUT_) for comparison, though.
 
 ## Install
 To install, first clone 
@@ -34,6 +54,21 @@ bash util/install_bpg.sh
 ```
 
 ## Use
+
+Basic usage is simple, if you want to apply a codec, use the `n_bytes, restored = codec.apply(original, encoded, decodec, quality)` method.
+
+- `original` path to image file or `numpy.ndarray` of dimension `HxWxC` or `CxHxW` typed `numpy.uint8` in RGB24 format
+- (optional) `encoded` path where the encoded file should be stored. If not provided, a temporary file is used.
+- (optional) `decoded` path where the decoded file should be stored. If not provided, a temporary file is used.
+- (optional) `quality` quality index (`int`) to use. Otherwise the codec's setting is used.
+- `n_bytes` size of the encoded bit stream in bytes
+- `restored` restored image (RGB24 `numpy.ndarray` in same dimensionality as `original`), only if `decoded` is not supplied.path where the encoded file should be stored. If not provided, a temporary file is used.
+
+### Examples
+Take a look at examples/example.py or just run it with
+```shell script
+python examples/example.py PATH_TO_FFMPEG_WITH_X265_AV1
+```
 
 ```python
 import pycodecs
