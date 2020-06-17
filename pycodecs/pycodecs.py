@@ -18,7 +18,7 @@ class Codec(object):
             self.default_quality = quality
 
     def encode(self, source: Union[str, np.ndarray], target: Union[str, None] = None, quality: int = None) \
-            -> Union[None, np.ndarray]:
+            -> Union[None, bytes]:
         raise NotImplementedError()
 
     def decode(self, source: Union[str, bytes], target: Union[str, None] = None) -> Union[None, np.ndarray]:
@@ -118,7 +118,7 @@ class BPG(Codec):
         return not find_executable("bpgenc") is None and not find_executable("bpgdec") is None
 
     def encode(self, source: Union[str, np.ndarray], target: Union[str, None] = None, quality: int = None) \
-            -> Union[None, np.ndarray]:
+            -> Union[None, bytes]:
         if quality is None:
             quality = self.default_quality
         subprocess.run(["bpgenc", "-m", str(self.speed), "-b", str(self.bitdepth), "-q", str(quality), "-c",
@@ -153,7 +153,7 @@ class WebP(Codec):
         return not find_executable('cwebp') is None and not find_executable('dwebp') is None
 
     def encode(self, source: Union[str, np.ndarray], target: Union[str, None] = None, quality: int = None) \
-            -> Union[None, np.ndarray]:
+            -> Union[None, bytes]:
         if quality is None:
             quality = self.default_quality
         subprocess.run(["cwebp", "-quiet", "-m", str(self.speed), "-q", str(quality), source, "-o", target])
@@ -180,7 +180,7 @@ class JPEGFI(Codec):
         return True
 
     def encode(self, source: Union[str, np.ndarray], target: Union[str, None] = None, quality: int = None) \
-            -> Union[None, np.ndarray]:
+            -> Union[None, bytes]:
         if quality is None:
             quality = self.default_quality
         imageio.imwrite(target, imageio.imread(source), quality=quality, optimize=True, baseline=True)
@@ -207,7 +207,7 @@ class JPEG(Codec):
         return True
 
     def encode(self, source: Union[str, np.ndarray], target: Union[str, None] = None, quality: int = None) \
-            -> Union[None, np.ndarray]:
+            -> Union[None, bytes]:
         if quality is None:
             quality = self.default_quality
         imageio.imwrite(target, imageio.imread(source), quality=quality, optimize=True)
@@ -232,8 +232,10 @@ class FFMPEG(Codec):
         self.format = 'nut'
         self.pixel_format = pixel_format
         self.codec = ''
-        if ffmpeg_path is None:
+        if ffmpeg_path is None or len(ffmpeg_path) == 0:
             self.ffmpeg_path = 'ffmpeg'
+        elif os.path.isdir(ffmpeg_path):
+            self.ffmpeg_path = os.path.join(ffmpeg_path, 'ffmpeg')
         else:
             self.ffmpeg_path = ffmpeg_path
         self.additional_output_commands = list()
@@ -260,15 +262,24 @@ class FFMPEG(Codec):
             -> Union[None, bytes]:
         if quality is None:
             quality = self.default_quality
-        source_file = source
-        if type(source) == np.ndarray:
+        if quality not in self.quality_steps():
+            raise ValueError("Given quality index is not a valid quality step!")
+
+        input_cmd = list()
+        if type(source) == str:
+            source_file = source
+        else:
+            if type(source) != np.ndarray:
+                source = np.ndarray(source)
             source_file = "-"
+            input_cmd = ["-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{source.shape[1]}x{source.shape[0]}"]
         target_file = target
         if target is None:
             target_file = "-"
-
-        cmd = [self.ffmpeg_path, '-y', '-hide_banner', '-loglevel', 'panic', '-nostats'] + \
-              self.additional_input_commands + ["-i", source_file, "-c:v", self.codec, "-pix_fmt", self.pixel_format] \
+        # , '-loglevel', 'panic', '-nostats'
+        cmd = [self.ffmpeg_path, '-y', '-hide_banner'] + \
+              self.additional_input_commands + input_cmd +\
+              ["-i", source_file, "-c:v", self.codec, "-pix_fmt", self.pixel_format] \
               + self._quality_param(quality) + self.additional_output_commands + ['-f', self.format, target_file]
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if type(source) == np.ndarray:
@@ -325,7 +336,7 @@ class AV1(FFMPEG):
         return ["-crf", f"{quality}"]
 
     def quality_steps(self):
-        return [q for q in range(60, 0, -1)]
+        return [q for q in range(63, 0, -1)]
 
 
 class X265(FFMPEG):
@@ -334,7 +345,6 @@ class X265(FFMPEG):
         super(X265, self).__init__(**kwargs)
         self.format = format
         self.codec = "libx265"
-        self.additional_output_commands = ["-b:v", "0", "-strict", "experimental"]
 
     def available(self) -> bool:
         return super(X265, self)._available(self.codec)
