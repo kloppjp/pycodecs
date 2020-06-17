@@ -85,11 +85,11 @@ class Codec(object):
         else:  # We don't restore if file is given (you can read it yourself)
             restored = None
 
-        if restored is not None and channels_first:
-            restored = np.transpose(restored, (2, 0, 1))
-
-        while restored.ndim < original_ndim:
-            restored = restored[None]
+        if restored is not None:
+            if channels_first:
+                restored = np.transpose(restored, (2, 0, 1))
+            while restored.ndim < original_ndim:
+                restored = restored[None]
 
         if decoded_file is not None:
             decoded_file.close()
