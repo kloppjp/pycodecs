@@ -36,6 +36,7 @@ class Codec(object):
     def apply(self, original: Union[np.ndarray, str], quality: int = None, encoded: str = None, decoded: str = None) -> \
             (int, np.ndarray):
         channels_first = False
+        original_ndim = original.ndim
         encode_to_file = encoded is not None
         decode_to_file = decoded is not None
         original_file = None
@@ -86,6 +87,9 @@ class Codec(object):
 
         if restored is not None and channels_first:
             restored = np.transpose(restored, (2, 0, 1))
+
+        while restored.ndim < original_ndim:
+            restored = restored[None]
 
         if decoded_file is not None:
             decoded_file.close()
