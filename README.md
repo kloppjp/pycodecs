@@ -19,29 +19,18 @@ AV1 | Yes | https://aomedia.org/av1-features/get-started/
 
 While there are certainly some bugs hidden and the API design isn't final, the size 
 estimates for the AV1 code are too high, because the bitstream is wrapped in FFMPEG's _NUT_ format.
-This is to be fixed soon. X265 writes raw _hevc_ format on the contrary (you can enforce _NUT_) for comparison, though.
+This is to be fixed soon. X265 writes raw _hevc_ format on the contrary (you can enforce _NUT_ for comparison, though).
 
 ## Install
-To install, first clone 
-```shell script
-git clone https://github.com/kloppjp/pycodecs.git
-```
-Install requirements:
-```shell script
-pip install -r requirements.txt
-```
-Or, if you use conda:
-```shell script
-conda install --file requirements.txt
-```
-Install PyCodecs for use:
-```shell script
-pip install .
-```
-Install PyCodecs for development:
-```shell script
-pip install -e .
-```
+To install, first clone `git clone https://github.com/kloppjp/pycodecs.git`
+
+Install requirements with `pip install -r requirements.txt`
+
+Or, if you use conda: `conda install --file requirements.txt`
+
+Install PyCodecs for use: `pip install .`
+
+Or for development (your changes are applied locally directly): `pip install -e .`
 
 If you want to use AV1, you can get a current ffmpeg build with AV1 and x265 by running. 
 Note that you will be prompted for root access.
