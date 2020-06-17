@@ -32,11 +32,11 @@ Install PyCodecs for use: `pip install .`
 
 Or for development (your changes are applied locally directly): `pip install -e .`
 
-If you want to use AV1, you can get a current ffmpeg build with AV1 and x265 by running. 
-Note that you will be prompted for root access.
+If you want to use AV1, you can get a current ffmpeg build with AV1 and x265 by running (you will be prompted for root): 
 ```shell script
 bash util/install_ffmpeg_av1_x265.sh
 ```
+
 Same goes for BPG (providing x265 and h265/JCTVC image coding):
 ```shell script
 bash util/install_bpg.sh
@@ -51,7 +51,7 @@ Basic usage is simple, if you want to apply a codec, use the `n_bytes, restored 
 - (optional) `decoded` path where the decoded file should be stored. If not provided, a temporary file is used.
 - (optional) `quality` quality index (`int`) to use. Otherwise the codec's setting is used.
 - `n_bytes` size of the encoded bit stream in bytes
-- `restored` restored image (RGB24 `numpy.ndarray` in same dimensionality as `original`), only if `decoded` is not supplied.path where the encoded file should be stored. If not provided, a temporary file is used.
+- `restored` restored image (RGB24 `numpy.ndarray` in same dimensionality as `original`), only if `decoded` is not supplied. If not provided, a temporary file is used.
 
 ### Examples
 Take a look at examples/example.py or just run it with
@@ -59,6 +59,7 @@ Take a look at examples/example.py or just run it with
 python examples/example.py PATH_TO_FFMPEG_WITH_X265_AV1
 ```
 
+Alternatively, as simple as this:
 ```python
 import pycodecs
 x265 = pycodecs.X265(colourspace='ycbcr')
