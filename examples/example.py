@@ -42,5 +42,5 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         ffmpeg_path = sys.argv[1]
     encode(codec=BPG(format='444', quality=22))
-    encode(codec=X265(ffmpeg_path=ffmpeg_path, pixel_format='yuv444p', quality=22))
+    encode(codec=X265(ffmpeg_path=ffmpeg_path, pixel_format='yuv444p', quality=33))
     encode(codec=AV1(ffmpeg_path=ffmpeg_path, pixel_format='yuv444p', quality=63))

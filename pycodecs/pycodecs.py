@@ -283,7 +283,8 @@ class FFMPEG(Codec):
               + self._quality_param(quality) + self.additional_output_commands + ['-f', self.format, target_file]
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if type(source) == np.ndarray:
-            return proc.communicate(input=source.tobytes())[0] # if target is a file, then this will just return None
+            stream, message = proc.communicate(input=source.tobytes())# if target is a file, then this will just return None
+            return stream
         else:
             return proc.communicate()[0]
 
@@ -341,16 +342,17 @@ class AV1(FFMPEG):
 
 class X265(FFMPEG):
 
-    def __init__(self, format: str = 'hevc', **kwargs):
+    def __init__(self, format: str = 'hevc', tune: str = 'ssim', **kwargs):
         super(X265, self).__init__(**kwargs)
         self.format = format
         self.codec = "libx265"
+        self.additional_output_commands = ["-preset", "placebo", "-tune", tune]
 
     def available(self) -> bool:
         return super(X265, self)._available(self.codec)
 
     def _quality_param(self, quality: int) -> List[str]:
-        return ["-crf", f"{quality}"]
+        return ["-x265-params", f"qp={quality}"]
 
     def quality_steps(self):
         return [q for q in range(51, 0, -1)]
