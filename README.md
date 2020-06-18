@@ -62,7 +62,7 @@ python examples/example.py PATH_TO_FFMPEG_WITH_X265_AV1
 Alternatively, as simple as this:
 ```python
 import pycodecs
-x265 = pycodecs.X265(colourspace='ycbcr')
+x265 = pycodecs.X265()
 if x265.available():
     x265.apply(original="example.png", quality=37, encoded=f"example_37.{x265.file_extension}",
     decoded="example_decoded_37.png")
