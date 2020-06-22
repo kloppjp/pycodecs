@@ -6,16 +6,18 @@ import subprocess
 from typing import Union, List
 from distutils.spawn import find_executable
 import re
+from .util import RoundRobinList
 
 
 class Codec(object):
 
-    def __init__(self, quality: int = None):
+    def __init__(self, quality: int = None, call_log_len: int = 10):
         self.file_extension = None
         if quality is None:
             self.default_quality = self.quality_steps()[len(self.quality_steps()) // 2]
         else:
             self.default_quality = quality
+        self.system_calls = RoundRobinList(max_size=call_log_len)
 
     def encode(self, source: Union[str, np.ndarray], target: Union[str, None] = None, quality: int = None) \
             -> Union[None, bytes]:
@@ -121,12 +123,18 @@ class BPG(Codec):
             -> Union[None, bytes]:
         if quality is None:
             quality = self.default_quality
-        subprocess.run(["bpgenc", "-m", str(self.speed), "-b", str(self.bitdepth), "-q", str(quality), "-c",
-                        self.colourspace, "-f", self.format, "-e", self.encoder, source, "-o", target])
+        cmd = ["bpgenc", "-m", str(self.speed), "-b", str(self.bitdepth), "-q", str(quality), "-c",
+                        self.colourspace, "-f", self.format, "-e", self.encoder, source, "-o", target]
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        result = proc.communicate()
+        self.system_calls.append((cmd, result[0].decode()))
         return None
 
     def decode(self, source: Union[str, bytes], target: Union[str, None] = None) -> Union[None, np.ndarray]:
-        subprocess.run(["bpgdec", source, "-o", target])
+        cmd = ["bpgdec", source, "-o", target]
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        result = proc.communicate()
+        self.system_calls.append((cmd, result[0].decode()))
         return None
 
     def quality_steps(self):
@@ -156,11 +164,17 @@ class WebP(Codec):
             -> Union[None, bytes]:
         if quality is None:
             quality = self.default_quality
-        subprocess.run(["cwebp", "-quiet", "-m", str(self.speed), "-q", str(quality), source, "-o", target])
+        cmd = ["cwebp", "-quiet", "-m", str(self.speed), "-q", str(quality), source, "-o", target]
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        result = proc.communicate()
+        self.system_calls.append((cmd, result[0].decode()))
         return None
 
     def decode(self, source: Union[str, bytes], target: Union[str, None] = None) -> Union[None, np.ndarray]:
-        subprocess.run(["dwebp", "-quiet", source, "-o", target])
+        cmd = ["dwebp", "-quiet", source, "-o", target]
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        result = proc.communicate()
+        self.system_calls.append((cmd, result[0].decode()))
         return None
 
     def quality_steps(self):
@@ -283,10 +297,11 @@ class FFMPEG(Codec):
               + self._quality_param(quality) + self.additional_output_commands + ['-f', self.format, target_file]
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if type(source) == np.ndarray:
-            stream, message = proc.communicate(input=source.tobytes())# if target is a file, then this will just return None
-            return stream
+            stream, message = proc.communicate(input=source.tobytes()) # if target is a file, then stream will be None
         else:
-            return proc.communicate()[0]
+            stream, message = proc.communicate()
+        self.system_calls.append((cmd, message.decode()))
+        return stream
 
     def decode(self, source: Union[str, bytes], target: Union[str, None] = None) -> Union[None, np.ndarray]:
         source_file = source
@@ -298,14 +313,15 @@ class FFMPEG(Codec):
             target_file = "-"
             output_spec = ['-pix_fmt', 'rgb24', '-f', 'rawvideo']
 
-        proc = subprocess.Popen([self.ffmpeg_path, '-y', '-hide_banner', '-f', self.format,
-                                '-i', source_file] + output_spec + [target_file], stdin=subprocess.PIPE,
-                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        cmd = [self.ffmpeg_path, '-y', '-hide_banner', '-f', self.format, '-i', source_file] + output_spec + [target_file]
+        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         if type(source) == bytes:
             comm = proc.communicate(input=source)
         else:
             comm = proc.communicate()
+
+        self.system_calls.append((cmd, comm[1].decode()))
 
         if target is None:
             h = w = 0
