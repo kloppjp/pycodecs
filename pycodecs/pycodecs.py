@@ -333,7 +333,12 @@ class FFMPEG(Codec):
                             w = int(match.groups()[0])
                             h = int(match.groups()[1])
             if h == 0 or w == 0:
-                raise ValueError(f"Could not find image dimensions in FFMPEG info: {comm[1].decode()}")
+                raise ValueError(f"Could not find image dimensions in FFMPEG info.\n"
+                                 f"Last two commands/responses:\n"
+                                 f"CMD: {self.system_calls[-1][0]}\n"
+                                 f"RSP: {self.system_calls[-1][1]}\n"
+                                 f"CMD: {self.system_calls[-2][0]}\n"
+                                 f"RSP: {self.system_calls[-2][1]}")
             return np.frombuffer(comm[0], dtype=np.uint8).reshape(h, w, 3)
         else:
             return None
