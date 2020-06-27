@@ -3,8 +3,7 @@ from pycodecs import X265, AV1, BPG, Codec
 import numpy as np
 from time import time
 import sys
-
-TEST_IMAGE = "examples/PM5544_with_non-PAL_signals.png"
+import argparse
 
 
 def rgb2ycbcr(rgb_image: np.ndarray) -> np.ndarray:
@@ -18,13 +17,13 @@ def rgb2ycbcr(rgb_image: np.ndarray) -> np.ndarray:
     return (np.matmul(rgb_image.astype(np.float32), weights) + bias).astype(np.uint8)
 
 
-def encode(codec: Codec):
+def encode(codec: Codec, image: str):
 
     if not codec.available():
         print(f"{codec.__class__.__name__} is not available on your computer, please use scripts in ./util/ to install.")
         return
 
-    source = np.array(imread(TEST_IMAGE))
+    source = np.array(imread(image))
     t0 = time()
     encoded_len, restored = codec.apply(original=source)
     dT = time() - t0
@@ -38,9 +37,15 @@ def encode(codec: Codec):
 
 
 if __name__ == "__main__":
-    ffmpeg_path = None
-    if len(sys.argv) > 1:
-        ffmpeg_path = sys.argv[1]
-    encode(codec=BPG(format='444', quality=22))
-    encode(codec=X265(ffmpeg_path=ffmpeg_path, pixel_format='yuv444p', quality=33))
-    encode(codec=AV1(ffmpeg_path=ffmpeg_path, pixel_format='yuv444p', quality=63))
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--ffmpeg_backend", type=str, choices=['ffmpeg', 'pyav'], default='ffmpeg')
+    parser.add_argument("--ffmpeg_path", type=str, default=None)
+    parser.add_argument("--image", type=str, default="examples/Kinkaku-ji.png")
+    args = parser.parse_args()
+    encode(codec=BPG(format='444', quality=36), image=args.image)
+    encode(codec=X265(ffmpeg_path=args.ffmpeg_path, backend=args.ffmpeg_backend, pixel_format='yuv444p', quality=37),
+           image=args.image)
+    encode(codec=AV1(ffmpeg_path=args.ffmpeg_path, backend=args.ffmpeg_backend, pixel_format='yuv444p', quality=60),
+           image=args.image)
+
