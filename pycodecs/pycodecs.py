@@ -3,10 +3,12 @@ from tempfile import NamedTemporaryFile
 import imageio
 import os
 import subprocess
-from typing import Union, List
+from typing import Union, List, Dict
 from distutils.spawn import find_executable
 import re
 from .util import RoundRobinList
+import av
+from io import BytesIO
 
 
 class Codec(object):
@@ -238,9 +240,17 @@ class JPEG(Codec):
         return False
 
 
+def _param_to_arg_list(param: Dict[str, str]) -> List[str]:
+    result = list()
+    for k, v in param.items():
+        result.append(f"-{k}")
+        result.append(v)
+    return result
+
+
 class FFMPEG(Codec):
 
-    def __init__(self, pixel_format: str = 'yuv444p', ffmpeg_path: str = None, **kwargs):
+    def __init__(self, pixel_format: str = 'yuv444p', ffmpeg_path: str = None, backend: str = 'ffmpeg', **kwargs):
         super(FFMPEG, self).__init__(**kwargs)
         self.file_extension = '.nut'
         self.format = 'nut'
@@ -252,13 +262,19 @@ class FFMPEG(Codec):
             self.ffmpeg_path = os.path.join(ffmpeg_path, 'ffmpeg')
         else:
             self.ffmpeg_path = ffmpeg_path
-        self.additional_output_commands = list()
-        self.additional_input_commands = list()
+        self.additional_output_commands = dict()
+        self.additional_input_commands = dict()
+        assert backend in ('ffmpeg', 'pyav')
+        self._backend = backend
+
+    @property
+    def backend(self) -> str:
+        return self._backend
 
     def can_pipe(self) -> bool:
         return True
 
-    def _quality_param(self, quality: int) -> List[str]:
+    def _quality_param(self, quality: int) -> Dict[str, str]:
         raise NotImplementedError()
 
     def _available(self, codec_code: str):
@@ -272,13 +288,36 @@ class FFMPEG(Codec):
                 return True
         return False
 
-    def encode(self, source: Union[str, np.ndarray], target: Union[str, None] = None, quality: int = None) \
-            -> Union[None, bytes]:
-        if quality is None:
-            quality = self.default_quality
-        if quality not in self.quality_steps():
-            raise ValueError("Given quality index is not a valid quality step!")
+    def _encode_pyav(self, source: np.ndarray, quality: int) -> bytes:
+        options_dict = self.additional_output_commands
+        for k, v in self._quality_param(quality).items():
+            if k in options_dict.keys():
+                options_dict[k] = options_dict[k] + ":" + v
+            else:
+                options_dict[k] = v
+        bio = BytesIO()
+        container = av.open(bio, mode='w', format=self.format)
+        stream = container.add_stream(self.codec, rate=1, options=options_dict)
+        stream.width = source.shape[1]
+        stream.height = source.shape[0]
+        stream.pix_fmt = self.pixel_format
+        # Mux the packets of the stream into the container
+        for packet in stream.encode(av.VideoFrame.from_ndarray(source, format='rgb24')):
+            container.mux(packet)
+        # Write any residual information
+        for packet in stream.encode():
+            container.mux(packet)
+        container.close()
+        return bio.getvalue()
 
+    def _decode_pyav(self, source: bytes) -> np.ndarray:
+        bio = BytesIO(source)
+        container = av.open(bio, mode='r', format=self.format)
+        for frame in container.decode(video=0):
+            return frame.to_ndarray(format='rgb24')
+
+    def _encode_ffmpeg(self, source: Union[str, np.ndarray], target: Union[str, None] = None, quality: int = None) \
+            -> Union[None, bytes]:
         input_cmd = list()
         if type(source) == str:
             source_file = source
@@ -292,18 +331,34 @@ class FFMPEG(Codec):
             target_file = "-"
         # , '-loglevel', 'panic', '-nostats'
         cmd = [self.ffmpeg_path, '-y', '-hide_banner'] + \
-              self.additional_input_commands + input_cmd +\
+            _param_to_arg_list(self.additional_input_commands) + input_cmd + \
               ["-i", source_file, "-c:v", self.codec, "-pix_fmt", self.pixel_format] \
-              + self._quality_param(quality) + self.additional_output_commands + ['-f', self.format, target_file]
+            + _param_to_arg_list(self._quality_param(quality)) \
+            + _param_to_arg_list(self.additional_output_commands) +\
+              ['-f', self.format, target_file]
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if type(source) == np.ndarray:
-            stream, message = proc.communicate(input=source.tobytes()) # if target is a file, then stream will be None
+            stream, message = proc.communicate(input=source.tobytes())  # if target is a file, then stream will be None
         else:
             stream, message = proc.communicate()
         self.system_calls.append((cmd, message.decode()))
         return stream
 
-    def decode(self, source: Union[str, bytes], target: Union[str, None] = None) -> Union[None, np.ndarray]:
+    def encode(self, source: Union[str, np.ndarray], target: Union[str, None] = None, quality: int = None) \
+            -> Union[None, bytes]:
+        if quality is None:
+            quality = self.default_quality
+        if quality not in self.quality_steps():
+            raise ValueError("Given quality index is not a valid quality step!")
+
+        if self.backend == 'ffmpeg':
+            return self._encode_ffmpeg(source, target, quality)
+        elif self.backend == 'pyav':
+            if type(source) == str:
+                raise ValueError("PyAV backend for now only supports numpy.ndarray")
+            return self._encode_pyav(source, quality)
+
+    def _decode_ffmpeg(self, source: Union[str, bytes], target: Union[str, None] = None) -> Union[None, np.ndarray]:
         source_file = source
         if type(source) == bytes:
             source_file = "-"
@@ -313,7 +368,8 @@ class FFMPEG(Codec):
             target_file = "-"
             output_spec = ['-pix_fmt', 'rgb24', '-f', 'rawvideo']
 
-        cmd = [self.ffmpeg_path, '-y', '-hide_banner', '-f', self.format, '-i', source_file] + output_spec + [target_file]
+        cmd = [self.ffmpeg_path, '-y', '-hide_banner', '-f', self.format, '-i', source_file] + output_spec + [
+            target_file]
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         if type(source) == bytes:
@@ -322,7 +378,6 @@ class FFMPEG(Codec):
             comm = proc.communicate()
 
         self.system_calls.append((cmd, comm[1].decode()))
-
         if target is None:
             h = w = 0
             for line in comm[1].decode().split('\n'):
@@ -343,19 +398,25 @@ class FFMPEG(Codec):
         else:
             return None
 
+    def decode(self, source: Union[str, bytes], target: Union[str, None] = None) -> Union[None, np.ndarray]:
+        if self.backend == 'ffmpeg':
+            return self._decode_ffmpeg(source, target)
+        elif self.backend == 'pyav':
+            return self._decode_pyav(source)
+
 
 class AV1(FFMPEG):
 
     def __init__(self, **kwargs):
         super(AV1, self).__init__(**kwargs)
         self.codec = "libaom-av1"
-        self.additional_output_commands = ["-b:v", "0", "-strict", "experimental"]
+        self.additional_output_commands = {"strict": "experimental", "b:v": "0"}
 
     def available(self) -> bool:
         return super(AV1, self)._available('libaom-av1')
 
-    def _quality_param(self, quality: int) -> List[str]:
-        return ["-crf", f"{quality}"]
+    def _quality_param(self, quality: int) -> Dict[str, str]:
+        return {"crf": f"{quality}"}
 
     def quality_steps(self):
         return [q for q in range(63, 0, -1)]
@@ -363,17 +424,20 @@ class AV1(FFMPEG):
 
 class X265(FFMPEG):
 
-    def __init__(self, format: str = 'hevc', tune: str = 'ssim', **kwargs):
+    def __init__(self, format: str = 'hevc', tune: str = 'ssim', preset: str = 'veryslow', **kwargs):
         super(X265, self).__init__(**kwargs)
         self.format = format
         self.codec = "libx265"
-        self.additional_output_commands = ["-preset", "placebo", "-tune", tune]
+        self.preset = preset
+        self.additional_output_commands = {"preset": preset, "tune": tune}
+        if self.backend == 'pyav':
+            self.additional_output_commands['x265-params'] = 'log-level=0'
 
     def available(self) -> bool:
         return super(X265, self)._available(self.codec)
 
-    def _quality_param(self, quality: int) -> List[str]:
-        return ["-x265-params", f"qp={quality}"]
+    def _quality_param(self, quality: int) -> Dict[str, str]:
+        return {"x265-params": f"qp={quality}"}
 
     def quality_steps(self):
         return [q for q in range(51, 0, -1)]
