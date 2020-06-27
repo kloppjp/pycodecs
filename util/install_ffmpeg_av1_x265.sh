@@ -51,8 +51,10 @@ mkdir -p $FFMPEG_SRC/libaom && \
   cd $FFMPEG_SRC/libaom && \
   git clone https://aomedia.googlesource.com/aom && \
   cmake ./aom && \
-  make && \
-  sudo make install
+cat <<ABC >>CMakeCache.txt
+CMAKE_POSITION_INDEPENDENT_CODE:BOOL=ON
+ABC
+cmake . && make && sudo make install
 
 # Install libx265 from source.
 cd $FFMPEG_SRC && \
@@ -73,6 +75,7 @@ cd $FFMPEG_SRC && \
     --extra-ldflags="-L$FFMPEG_BLD/lib" \
     --extra-libs="-lpthread -lm" \
     --bindir="$FFMPEG_BIN" \
+    --enable-shared \
     --enable-gpl \
     --enable-libass \
     --enable-libfdk-aac \
@@ -85,6 +88,7 @@ cd $FFMPEG_SRC && \
     --enable-libopus \
     --enable-libvpx \
     --enable-libaom \
+    --enable-pic  \
     --enable-nonfree && \
   make && \
   make install && \
