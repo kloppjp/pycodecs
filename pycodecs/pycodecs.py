@@ -7,8 +7,13 @@ from typing import Union, List, Dict
 from distutils.spawn import find_executable
 import re
 from .util import RoundRobinList
-import av
 from io import BytesIO
+
+try:
+    import av
+    PYAV_AVAILABLE = True
+except ImportError:
+    PYAV_AVAILABLE = False
 
 
 class Codec(object):
@@ -250,10 +255,11 @@ def _param_to_arg_list(param: Dict[str, str]) -> List[str]:
 
 class FFMPEG(Codec):
 
-    def __init__(self, pixel_format: str = 'yuv444p', ffmpeg_path: str = None, backend: str = 'ffmpeg', **kwargs):
+    def __init__(self, pixel_format: str = 'yuv444p', ffmpeg_path: str = None, backend: str = None, format: str = 'nut',
+                 file_extension: str = '.nut', **kwargs):
         super(FFMPEG, self).__init__(**kwargs)
-        self.file_extension = '.nut'
-        self.format = 'nut'
+        self.file_extension = file_extension
+        self.format = format
         self.pixel_format = pixel_format
         self.codec = ''
         if ffmpeg_path is None or len(ffmpeg_path) == 0:
@@ -264,7 +270,13 @@ class FFMPEG(Codec):
             self.ffmpeg_path = ffmpeg_path
         self.additional_output_commands = dict()
         self.additional_input_commands = dict()
-        assert backend in ('ffmpeg', 'pyav')
+        assert backend in ('ffmpeg', 'pyav', None)
+        if PYAV_AVAILABLE and backend in ('pyav', None):
+            self._backend = 'pyav'
+        elif find_executable(self.ffmpeg_path) is not None and backend in ('ffmpeg', None):
+            self._backend = 'ffmpeg'
+        else:
+            raise LookupError("Could not find any suitable backend for ffmpeg-based codecs.")
         self._backend = backend
 
     @property
@@ -278,14 +290,17 @@ class FFMPEG(Codec):
         raise NotImplementedError()
 
     def _available(self, codec_code: str):
-        ffmpeg_exec = find_executable(self.ffmpeg_path)
-        if ffmpeg_exec is None:
-            return False
-        output = subprocess.Popen([self.ffmpeg_path, '-hide_banner', '-codecs'], stdout=subprocess.PIPE).communicate()[0]
-        output = output.decode().split('\n')
-        for line in output:
-            if codec_code in line:
-                return True
+        if self.backend == 'pyav':
+            return codec_code in av.codec.codecs_available
+        elif self.backend == 'ffmpeg':
+            ffmpeg_exec = find_executable(self.ffmpeg_path)
+            if ffmpeg_exec is None:
+                return False
+            output = subprocess.Popen([self.ffmpeg_path, '-hide_banner', '-codecs'], stdout=subprocess.PIPE).communicate()[0]
+            output = output.decode().split('\n')
+            for line in output:
+                if codec_code in line:
+                    return True
         return False
 
     def _encode_pyav(self, source: np.ndarray, quality: int) -> bytes:
@@ -297,12 +312,15 @@ class FFMPEG(Codec):
                 options_dict[k] = v
         bio = BytesIO()
         container = av.open(bio, mode='w', format=self.format)
-        stream = container.add_stream(self.codec, rate=1, options=options_dict)
+        stream = container.add_stream(self.codec, rate=1, framerate=1, options=options_dict)
         stream.width = source.shape[1]
         stream.height = source.shape[0]
         stream.pix_fmt = self.pixel_format
         # Mux the packets of the stream into the container
-        for packet in stream.encode(av.VideoFrame.from_ndarray(source, format='rgb24')):
+        frame = av.VideoFrame.from_ndarray(source, format='rgb24')
+        frame.pts = None
+        frame.time_base = None
+        for packet in stream.encode(frame):
             container.mux(packet)
         # Write any residual information
         for packet in stream.encode():
@@ -424,9 +442,9 @@ class AV1(FFMPEG):
 
 class X265(FFMPEG):
 
-    def __init__(self, format: str = 'hevc', tune: str = 'ssim', preset: str = 'veryslow', **kwargs):
+    def __init__(self, tune: str = 'ssim', preset: str = 'veryslow', **kwargs):
         super(X265, self).__init__(**kwargs)
-        self.format = format
+        self.format = 'hevc'
         self.codec = "libx265"
         self.preset = preset
         self.additional_output_commands = {"preset": preset, "tune": tune}
