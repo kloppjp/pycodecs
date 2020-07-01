@@ -45,6 +45,7 @@ if [ $INSTALL_APT = true ]; then
     wget \
     zlib1g-dev \
     yasm \
+    nasm \
     libvpx-dev \
     libopus-dev \
     libx264-dev \
