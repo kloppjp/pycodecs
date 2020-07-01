@@ -8,6 +8,7 @@ from distutils.spawn import find_executable
 import re
 from .util import RoundRobinList
 from io import BytesIO
+from copy import copy
 
 try:
     import av
@@ -304,7 +305,7 @@ class FFMPEG(Codec):
         return False
 
     def _encode_pyav(self, source: np.ndarray, quality: int) -> bytes:
-        options_dict = self.additional_output_commands
+        options_dict = copy(self.additional_output_commands)
         for k, v in self._quality_param(quality).items():
             if k in options_dict.keys():
                 options_dict[k] = options_dict[k] + ":" + v
@@ -318,8 +319,6 @@ class FFMPEG(Codec):
         stream.pix_fmt = self.pixel_format
         # Mux the packets of the stream into the container
         frame = av.VideoFrame.from_ndarray(source, format='rgb24')
-        frame.pts = None
-        frame.time_base = None
         for packet in stream.encode(frame):
             container.mux(packet)
         # Write any residual information
@@ -442,12 +441,17 @@ class AV1(FFMPEG):
 
 class X265(FFMPEG):
 
-    def __init__(self, tune: str = 'ssim', preset: str = 'veryslow', **kwargs):
+    def __init__(self, tune: Union[str, None] = 'ssim', preset: str = 'veryslow', format: str = 'hevc', **kwargs):
         super(X265, self).__init__(**kwargs)
-        self.format = 'hevc'
+        self.format = format
         self.codec = "libx265"
         self.preset = preset
-        self.additional_output_commands = {"preset": preset, "tune": tune}
+        self.additional_output_commands = {"preset": preset}
+        if tune is not None:
+            if self.format == 'nut' and self.backend == 'pyav':
+                raise ValueError("Error: Using the NUT format with x265 tuning (especially psnr/ssim) is known to"
+                                 " yield errors within PyAV, please either deactivate tuning or choose hevc format")
+            self.additional_output_commands["tune"] = tune
         if self.backend == 'pyav':
             self.additional_output_commands['x265-params'] = 'log-level=0'
 
