@@ -305,6 +305,7 @@ class FFMPEG(Codec):
         return False
 
     def _encode_pyav(self, source: np.ndarray, quality: int) -> bytes:
+        assert type(source) == np.ndarray, f"Source must be numpy.ndarray for PyAV but was {type(source)}"
         options_dict = copy(self.additional_output_commands)
         for k, v in self._quality_param(quality).items():
             if k in options_dict.keys():
@@ -340,7 +341,7 @@ class FFMPEG(Codec):
             source_file = source
         else:
             if type(source) != np.ndarray:
-                source = np.ndarray(source)
+                source = np.array(source)
             source_file = "-"
             input_cmd = ["-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{source.shape[1]}x{source.shape[0]}"]
         target_file = target
