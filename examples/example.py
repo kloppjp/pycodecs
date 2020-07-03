@@ -1,5 +1,5 @@
 from imageio import imread
-from pycodecs import X265, AV1, BPG, Codec
+from pycodecs import X265, AV1, BPG, Codec, X264
 import numpy as np
 from time import time
 import sys
@@ -43,6 +43,8 @@ if __name__ == "__main__":
     parser.add_argument("--ffmpeg_path", type=str, default=None)
     parser.add_argument("--image", type=str, default="examples/Kinkaku-ji.png")
     args = parser.parse_args()
+    encode(codec=X264(ffmpeg_path=args.ffmpeg_path, backend=args.ffmpeg_backend, pixel_format='yuv444p', quality=37),
+           image=args.image)
     encode(codec=BPG(format='444', quality=36), image=args.image)
     encode(codec=X265(ffmpeg_path=args.ffmpeg_path, backend=args.ffmpeg_backend, pixel_format='yuv444p', quality=37),
            image=args.image)
