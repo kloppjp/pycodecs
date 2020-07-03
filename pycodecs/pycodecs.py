@@ -463,7 +463,35 @@ class X265(FFMPEG):
         return {"x265-params": f"qp={quality}"}
 
     def quality_steps(self):
-        return [q for q in range(51, 0, -1)]
+        return [q for q in range(51, -1, -1)]
 
 
-codecs = {'bpg': BPG, 'webp': WebP, 'jpegfi': JPEGFI, 'av1': AV1, 'jpeg': JPEG, 'x265': X265}
+class X264(FFMPEG):
+
+    available_presets = ('ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium', 'slow', 'slower',
+                         'veryslow', 'placebo')
+    available_tunes = ('film', 'animation', 'grain', 'stillimage', 'fastdecode', 'zerolatency', 'psnr', 'ssim', None)
+
+    def __init__(self, tune: Union[str, None] = None, preset: str = 'veryslow', format: str = 'nut', **kwargs):
+        super(X264, self).__init__(**kwargs)
+        assert preset in self.available_presets, f"Chosen preset '{preset}' is not available."
+        assert tune in self.available_tunes, f"Chosen tune '{tune}' is not available."
+        self.format = format
+        self.codec = "libx264"
+        self.preset = preset
+        self.additional_output_commands = {"preset": preset}
+        if tune is not None:
+            self.additional_output_commands["tune"] = tune
+        if self.backend == 'pyav':
+            self.additional_output_commands['x264-params'] = 'log-level=0'
+
+    def available(self) -> bool:
+        return super(X264, self)._available(self.codec)
+
+    def _quality_param(self, quality: int) -> Dict[str, str]:
+        return {"x264-params": f"qp={quality}"}
+
+    def quality_steps(self):
+        return [q for q in range(51, -1, -1)]
+
+
