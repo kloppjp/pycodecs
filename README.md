@@ -17,6 +17,8 @@ BPG/H265 | syscall |  https://bellard.org/bpg/
 X265 | ffmpeg (pipe) / pyav (direct) | http://x265.org/
 X264 | ffmpeg (pipe) / pyav (direct) | http://x264.org/
 AV1 | ffmpeg (pipe) / pyav (direct) | https://aomedia.org/av1-features/get-started/
+JPEG | ffmpeg (pipe) |
+JPEG2000 | ffmpeg (pipe)
 
 ### Caveats
 
