@@ -1,8 +1,7 @@
 from imageio import imread
-from pycodecs import X265, AV1, BPG, Codec, X264
+from pycodecs import X265, AV1, BPG, Codec, X264, JPEG, JPEG2000
 import numpy as np
 from time import time
-import sys
 import argparse
 
 
@@ -17,7 +16,7 @@ def rgb2ycbcr(rgb_image: np.ndarray) -> np.ndarray:
     return (np.matmul(rgb_image.astype(np.float32), weights) + bias).astype(np.uint8)
 
 
-def encode(codec: Codec, image: str):
+def encode(codec: Codec, image: str, show_syscalls: bool = False):
 
     if not codec.available():
         print(f"{codec.__class__.__name__} is not available on your computer, please use scripts in ./util/ to install.")
@@ -34,6 +33,11 @@ def encode(codec: Codec, image: str):
         f"{codec.__class__.__name__}: Encoded image has YCbCr444 PSNR={psnr:0.4f}dB at "
         f"{encoded_len * 8 / source.size * 3:0.4f}bpp. "
         f"Took {dT:0.4f}s")
+    if show_syscalls and len(codec.system_calls) >= 2:
+        print(f"CMD: {codec.system_calls[-1][0]}\n"
+              f"RSP: {codec.system_calls[-1][1]}\n"
+              f"CMD: {codec.system_calls[-2][0]}\n"
+              f"RSP: {codec.system_calls[-2][1]}")
 
 
 if __name__ == "__main__":
@@ -43,11 +47,13 @@ if __name__ == "__main__":
     parser.add_argument("--ffmpeg_path", type=str, default=None)
     parser.add_argument("--image", type=str, default="examples/Kinkaku-ji.png")
     args = parser.parse_args()
+    encode(codec=JPEG(quality=14, backend=args.ffmpeg_backend), image=args.image)
+    encode(codec=JPEG2000(quality=19, backend=args.ffmpeg_backend), image=args.image)
     encode(codec=X264(ffmpeg_path=args.ffmpeg_path, backend=args.ffmpeg_backend, pixel_format='yuv444p', quality=37),
            image=args.image)
     encode(codec=BPG(format='444', quality=36), image=args.image)
     encode(codec=X265(ffmpeg_path=args.ffmpeg_path, backend=args.ffmpeg_backend, pixel_format='yuv444p', quality=37),
            image=args.image)
-    encode(codec=AV1(ffmpeg_path=args.ffmpeg_path, backend=args.ffmpeg_backend, pixel_format='yuv444p', quality=60),
+    encode(codec=AV1(ffmpeg_path=args.ffmpeg_path, backend=args.ffmpeg_backend, pixel_format='yuv444p', quality=42),
            image=args.image)
 
