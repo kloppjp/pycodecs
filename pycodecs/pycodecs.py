@@ -192,63 +192,11 @@ class WebP(Codec):
         return False
 
 
-class JPEGFI(Codec):
-
-    def __init__(self, **kwargs):
-        super(JPEGFI, self).__init__(**kwargs)
-        self.file_extension = '.jif'
-
-    def available(self):
-        return True
-
-    def encode(self, source: Union[str, np.ndarray], target: Union[str, None] = None, quality: int = None) \
-            -> Union[None, bytes]:
-        if quality is None:
-            quality = self.default_quality
-        imageio.imwrite(target, imageio.imread(source), quality=quality, optimize=True, baseline=True)
-        return None
-
-    def decode(self, source: Union[str, bytes], target: Union[str, None] = None) -> Union[None, np.ndarray]:
-        imageio.imwrite(target, imageio.imread(source))
-        return None
-
-    def quality_steps(self):
-        return [q for q in range(1, 101)]
-
-    def can_pipe(self) -> bool:
-        return False
-
-
-class JPEG(Codec):
-
-    def __init__(self, **kwargs):
-        super(JPEG, self).__init__(**kwargs)
-        self.file_extension = '.jpg'
-
-    def available(self):
-        return True
-
-    def encode(self, source: Union[str, np.ndarray], target: Union[str, None] = None, quality: int = None) \
-            -> Union[None, bytes]:
-        if quality is None:
-            quality = self.default_quality
-        imageio.imwrite(target, imageio.imread(source), quality=quality, optimize=True)
-        return None
-
-    def decode(self, source: Union[str, bytes], target: Union[str, None] = None) -> Union[None, np.ndarray]:
-        imageio.imwrite(target, imageio.imread(source))
-        return None
-
-    def quality_steps(self):
-        return [q for q in range(1, 101)]
-
-    def can_pipe(self) -> bool:
-        return False
-
-
 def _param_to_arg_list(param: Dict[str, str]) -> List[str]:
     result = list()
     for k, v in param.items():
+        if v is None:
+            continue
         result.append(f"-{k}")
         result.append(v)
     return result
@@ -274,11 +222,10 @@ class FFMPEG(Codec):
         assert backend in ('ffmpeg', 'pyav', None)
         if PYAV_AVAILABLE and backend in ('pyav', None):
             self._backend = 'pyav'
-        elif find_executable(self.ffmpeg_path) is not None and backend in ('ffmpeg', None):
+        elif self._is_ffmpeg_backend_available() and backend in ('ffmpeg', None):
             self._backend = 'ffmpeg'
         else:
             raise LookupError("Could not find any suitable backend for ffmpeg-based codecs.")
-        self._backend = backend
 
     @property
     def backend(self) -> str:
@@ -290,12 +237,17 @@ class FFMPEG(Codec):
     def _quality_param(self, quality: int) -> Dict[str, str]:
         raise NotImplementedError()
 
+    def _is_ffmpeg_backend_available(self) -> bool:
+        ffmpeg_exec = find_executable(self.ffmpeg_path)
+        if ffmpeg_exec is None:
+            return False
+        return True
+
     def _available(self, codec_code: str):
         if self.backend == 'pyav':
             return codec_code in av.codec.codecs_available
         elif self.backend == 'ffmpeg':
-            ffmpeg_exec = find_executable(self.ffmpeg_path)
-            if ffmpeg_exec is None:
+            if not self._is_ffmpeg_backend_available():
                 return False
             output = subprocess.Popen([self.ffmpeg_path, '-hide_banner', '-codecs'], stdout=subprocess.PIPE).communicate()[0]
             output = output.decode().split('\n')
@@ -306,7 +258,11 @@ class FFMPEG(Codec):
 
     def _encode_pyav(self, source: np.ndarray, quality: int) -> bytes:
         assert type(source) == np.ndarray, f"Source must be numpy.ndarray for PyAV but was {type(source)}"
-        options_dict = copy(self.additional_output_commands)
+        options_dict = dict()
+        for k, v in self.additional_output_commands.items():
+            if v is None:
+                continue
+            options_dict[k] = v
         for k, v in self._quality_param(quality).items():
             if k in options_dict.keys():
                 options_dict[k] = options_dict[k] + ":" + v
@@ -314,10 +270,13 @@ class FFMPEG(Codec):
                 options_dict[k] = v
         bio = BytesIO()
         container = av.open(bio, mode='w', format=self.format)
+
         stream = container.add_stream(self.codec, rate=1, framerate=1, options=options_dict)
         stream.width = source.shape[1]
         stream.height = source.shape[0]
         stream.pix_fmt = self.pixel_format
+        stream.codec_context.bit_rate = 0  # Needs to be set to 0 for libaom-av1 to work properly
+        stream.codec_context.bit_rate_tolerance = 0
         # Mux the packets of the stream into the container
         frame = av.VideoFrame.from_ndarray(source, format='rgb24')
         for packet in stream.encode(frame):
@@ -347,10 +306,13 @@ class FFMPEG(Codec):
         target_file = target
         if target is None:
             target_file = "-"
+        target_pixel_format = []
+        if self.pixel_format is not None:
+            target_pixel_format = ["-pix_fmt", self.pixel_format]
         # , '-loglevel', 'panic', '-nostats'
         cmd = [self.ffmpeg_path, '-y', '-hide_banner'] + \
             _param_to_arg_list(self.additional_input_commands) + input_cmd + \
-              ["-i", source_file, "-c:v", self.codec, "-pix_fmt", self.pixel_format] \
+              ["-i", source_file, "-c:v", self.codec] + target_pixel_format \
             + _param_to_arg_list(self._quality_param(quality)) \
             + _param_to_arg_list(self.additional_output_commands) +\
               ['-f', self.format, target_file]
@@ -472,7 +434,7 @@ class X264(FFMPEG):
                          'veryslow', 'placebo')
     available_tunes = ('film', 'animation', 'grain', 'stillimage', 'fastdecode', 'zerolatency', 'psnr', 'ssim', None)
 
-    def __init__(self, tune: Union[str, None] = None, preset: str = 'veryslow', format: str = 'nut', **kwargs):
+    def __init__(self, tune: Union[str, None] = None, preset: str = 'veryslow', format: str = 'h264', **kwargs):
         super(X264, self).__init__(**kwargs)
         assert preset in self.available_presets, f"Chosen preset '{preset}' is not available."
         assert tune in self.available_tunes, f"Chosen tune '{tune}' is not available."
@@ -482,8 +444,6 @@ class X264(FFMPEG):
         self.additional_output_commands = {"preset": preset}
         if tune is not None:
             self.additional_output_commands["tune"] = tune
-        if self.backend == 'pyav':
-            self.additional_output_commands['x264-params'] = 'log-level=0'
 
     def available(self) -> bool:
         return super(X264, self)._available(self.codec)
@@ -495,3 +455,51 @@ class X264(FFMPEG):
         return [q for q in range(51, -1, -1)]
 
 
+# ToDo: Properly transmit quality parameter when JPEG is used with PyAV
+class JPEG(FFMPEG):
+
+    def __init__(self, **kwargs):
+        super(JPEG, self).__init__(**kwargs)
+        self.format = 'nut'
+        self.codec = 'mjpeg'
+        self.pixel_format = 'yuvj444p'
+        if not self.backend == 'ffmpeg':
+            if not super(JPEG, self)._is_ffmpeg_backend_available():
+                raise LookupError(f"{self.__class__.__name__} is currently only available with ffmpeg backend, but the"
+                                  f"ffmpeg executable could not be found.")
+            else:
+                self._backend = 'ffmpeg'
+
+    def available(self) -> bool:
+        return super(JPEG, self)._available(self.codec)
+
+    def _quality_param(self, quality: int) -> Dict[str, str]:
+        return {"qscale:v": f"{quality}"}
+
+    def quality_steps(self) -> List[int]:
+        return [q for q in range(31, 1, -1)]
+
+
+# ToDo: Properly transmit quality parameter when JPEG2000 is used with PyAV
+class JPEG2000(FFMPEG):
+
+    def __init__(self, **kwargs):
+        super(JPEG2000, self).__init__(**kwargs)
+        self.format = 'nut'
+        self.codec = 'jpeg2000'
+        self.pixel_format = 'yuv444p'
+        if not self.backend == 'ffmpeg':
+            if not super(JPEG2000, self)._is_ffmpeg_backend_available():
+                raise LookupError(f"{self.__class__.__name__} is currently only available with ffmpeg backend, but the"
+                                  f"ffmpeg executable could not be found.")
+            else:
+                self._backend = 'ffmpeg'
+
+    def available(self) -> bool:
+        return super(JPEG2000, self)._available(self.codec)
+
+    def _quality_param(self, quality: int) -> Dict[str, str]:
+        return {"qscale:v": f"{quality}"}
+
+    def quality_steps(self) -> List[int]:
+        return [q for q in range(31, 1, -1)]
