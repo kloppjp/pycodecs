@@ -13,7 +13,7 @@ def rgb2ycbcr(rgb_image: np.ndarray) -> np.ndarray:
     weights[1] = (-37.797 / 255.0, -74.203 / 255.0, 112.0 / 255.0)
     weights[2] = (112.0 / 255.0, -93.786 / 255.0, -18.214 / 255.0)
     bias = np.array((16.0, 128.0, 128.0), dtype=np.float32)
-    return (np.matmul(rgb_image.astype(np.float32), weights) + bias).astype(np.uint8)
+    return (np.matmul(rgb_image.astype(np.float32), weights.T) + bias).astype(np.uint8)
 
 
 def encode(codec: Codec, image: str, show_syscalls: bool = False):
