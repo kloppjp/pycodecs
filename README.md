@@ -33,8 +33,10 @@ This is to be fixed soon. X265 writes raw _hevc_ format on the contrary (you can
     2. If you use Conda: `conda install --file requirements.txt`
 2. If you'd like to use the PyAV backend
     1. FFMPEG (if not installed): `bash util/install_ffmpeg_av1_x265.sh $HOME/ffmpeg`
-    2. Add paths to libraries to your environment (so that PyAV can find them)
+    2. Add paths to libraries to your environment (so that PyAV can find them), 
+    you can add these lines to `$HOME/.bashrc` (don't forget to run `source $HOME/.bashrc`)
         1. `export LD_LIBRARY_PATH="$HOME/ffmpeg/build/lib:$LD_LIBRARY_PATH"`
+        2. `export PKG_CONFIG_PATH="$HOME/ffmpeg/build/lib/pkgconfig:$PKG_CONFIG_PATH"`
     3. Install PyAV: `pip install av --no-binary av --install-option="--ffmpeg-dir=$HOME/ffmpeg/build/"`
 3. Install PyCodecs
     1. Clone: `git clone https://github.com/kloppjp/pycodecs.git`
