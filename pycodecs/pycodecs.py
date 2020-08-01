@@ -8,7 +8,6 @@ from distutils.spawn import find_executable
 import re
 from .util import RoundRobinList
 from io import BytesIO
-from copy import copy
 
 try:
     import av
@@ -456,10 +455,10 @@ class X264(FFMPEG):
 
 
 # ToDo: Properly transmit quality parameter when JPEG is used with PyAV
-class JPEG(FFMPEG):
+class MJPEG(FFMPEG):
 
     def __init__(self, **kwargs):
-        super(JPEG, self).__init__(**kwargs)
+        super(MJPEG, self).__init__(**kwargs)
         self.format = 'nut'
         self.codec = 'mjpeg'
         self.pixel_format = 'yuvj444p'
@@ -471,7 +470,7 @@ class JPEG(FFMPEG):
                 self._backend = 'ffmpeg'
 
     def available(self) -> bool:
-        return super(JPEG, self)._available(self.codec)
+        return super(MJPEG, self)._available(self.codec)
 
     def _quality_param(self, quality: int) -> Dict[str, str]:
         return {"qscale:v": f"{quality}"}
@@ -503,3 +502,34 @@ class JPEG2000(FFMPEG):
 
     def quality_steps(self) -> List[int]:
         return [q for q in range(31, 1, -1)]
+
+
+class JPEG(Codec):
+
+    def __init__(self, optimize: bool = True, **kwargs):
+        super(JPEG, self).__init__(**kwargs)
+        self.optimize = optimize
+
+    def available(self) -> bool:
+        return True
+
+    def encode(self, source: Union[str, np.ndarray], target: Union[str, None] = None, quality: int = None) -> Union[None, bytes]:
+        if quality is None:
+            quality = self.default_quality
+        out = BytesIO()
+        if self.optimize:
+            imageio.imwrite(out, source, format='jpeg', quality=quality, optimize=True)
+        else:
+            imageio.imwrite(out, source, format='jpeg', quality=quality)
+        return out.getvalue()
+
+    def decode(self, source: Union[str, bytes], target: Union[str, None] = None) -> Union[None, np.ndarray]:
+        io = BytesIO(initial_bytes=source)
+        return np.asarray(imageio.imread(io, format='jpeg', pilmode='RGB'))
+
+    def quality_steps(self) -> List[int]:
+        return list(range(1, 101))
+
+    def can_pipe(self) -> bool:
+        return True
+
