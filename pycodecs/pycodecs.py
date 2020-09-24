@@ -45,11 +45,11 @@ class Codec(object):
     def apply(self, original: Union[np.ndarray, str], quality: int = None, encoded: str = None, decoded: str = None) -> \
             (int, np.ndarray):
         channels_first = False
-        original_ndim = original.ndim
         encode_to_file = encoded is not None
         decode_to_file = decoded is not None
         original_file = None
         if type(original) == np.ndarray:
+            original_ndim = original.ndim
             if original.ndim == 4:
                 if original.shape[0] != 1:
                     raise ValueError("If a 4D ndarray is supplied, it can only have a single entry in the first "
@@ -97,8 +97,9 @@ class Codec(object):
         if restored is not None:
             if channels_first:
                 restored = np.transpose(restored, (2, 0, 1))
-            while restored.ndim < original_ndim:
-                restored = restored[None]
+            if type(original) == np.ndarray:
+                while restored.ndim < original_ndim:
+                    restored = restored[None]
 
         if decoded_file is not None:
             decoded_file.close()
@@ -362,7 +363,7 @@ class FFMPEG(Codec):
             for line in comm[1].decode().split('\n'):
                 if line.strip().startswith("Stream"):
                     for d in line.strip().split(','):
-                        match = re.search("^([0-9]{1,4})x([0-9]{1,4})$", d.strip())
+                        match = re.search("^([0-9]{1,4})x([0-9]{1,4}){0,1}.*", d.strip())
                         if match is not None:
                             w = int(match.groups()[0])
                             h = int(match.groups()[1])
@@ -463,7 +464,7 @@ class MJPEG(FFMPEG):
         self.codec = 'mjpeg'
         self.pixel_format = 'yuvj444p'
         if not self.backend == 'ffmpeg':
-            if not super(JPEG, self)._is_ffmpeg_backend_available():
+            if not super(MJPEG, self)._is_ffmpeg_backend_available():
                 raise LookupError(f"{self.__class__.__name__} is currently only available with ffmpeg backend, but the"
                                   f"ffmpeg executable could not be found.")
             else:
