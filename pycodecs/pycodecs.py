@@ -507,9 +507,11 @@ class JPEG2000(FFMPEG):
 
 class JPEG(Codec):
 
-    def __init__(self, optimize: bool = True, **kwargs):
+    def __init__(self, optimize: bool = True, subsampling: str = '4:2:0', **kwargs):
         super(JPEG, self).__init__(**kwargs)
         self.optimize = optimize
+        self.subsampling = subsampling
+        assert self.subsampling in ('4:4:4', '4:2:2', '4:2:0', 0, 1, 2)
 
     def available(self) -> bool:
         return True
@@ -517,11 +519,11 @@ class JPEG(Codec):
     def encode(self, source: Union[str, np.ndarray], target: Union[str, None] = None, quality: int = None) -> Union[None, bytes]:
         if quality is None:
             quality = self.default_quality
+        if type(source) == str:
+            source = imageio.imread(source)
         out = BytesIO()
-        if self.optimize:
-            imageio.imwrite(out, source, format='jpeg', quality=quality, optimize=True)
-        else:
-            imageio.imwrite(out, source, format='jpeg', quality=quality)
+        imageio.imwrite(out, source, format='jpeg', quality=quality, optimize=self.optimize,
+                        subsampling=self.subsampling)
         return out.getvalue()
 
     def decode(self, source: Union[str, bytes], target: Union[str, None] = None) -> Union[None, np.ndarray]:
